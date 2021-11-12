@@ -99,10 +99,10 @@ def get_ruby_version(repo_dir)
 
     ruby_version[:ruby_version] = check_output("ruby -v").strip.gsub("\n", " ")
 
-    Dir.chdir(repo_dir) do
-        ruby_version[:git_branch] = check_output("git branch --show-current").strip
-        ruby_version[:git_commit] = check_output("git log --pretty=format:%h -n 1").strip
-    end
+    # Dir.chdir(repo_dir) do
+    #     ruby_version[:git_branch] = check_output("git branch --show-current").strip
+    #     ruby_version[:git_commit] = check_output("git log --pretty=format:%h -n 1").strip
+    # end
 
     return ruby_version
 end
@@ -234,7 +234,8 @@ def run_benchmarks(ruby_opts, name_filters, out_path)
                 # Disable address space randomization (for determinism)
                 "setarch", "x86_64", "-R",
                 # Pin the process to one given core to improve caching
-                "taskset", "-c", "11",
+                # "taskset", "-c", "11",
+                "taskset", "--cpu-list", "0-2,1"
             ]
         end
         cmd += [
@@ -260,7 +261,7 @@ end
 # Default values for command-line arguments
 args = OpenStruct.new({
     repo_dir: "../yjit",
-    out_path: "./data",
+    out_path: "data",
     yjit_opts: "",
     name_filters: []
 })
@@ -291,13 +292,13 @@ end
 
 # Check that the chruby command was run
 # Note: we intentionally do this first
-check_chruby()
+# check_chruby()
 
 # Disable CPU frequency scaling
-set_bench_config()
+# set_bench_config()
 
 # Check pstate status
-check_pstate()
+# check_pstate()
 
 # Create the output directory
 FileUtils.mkdir_p(args.out_path)
@@ -307,94 +308,25 @@ ruby_version = get_ruby_version(args.repo_dir)
 
 # Benchmark with and without YJIT
 bench_start_time = Time.now.to_f
-yjit_times = run_benchmarks(ruby_opts="--yjit #{args.yjit_opts}", name_filters=args.name_filters, out_path=args.out_path)
-interp_times = run_benchmarks(ruby_opts="--disable-yjit", name_filters=args.name_filters, out_path=args.out_path)
+interp_times = run_benchmarks(ruby_opts="", name_filters=args.name_filters, out_path=args.out_path)
 bench_end_time = Time.now.to_f
-bench_names = yjit_times.keys.sort
+bench_names = interp_times.keys.sort
 
 bench_total_time = (bench_end_time - bench_start_time).to_i
 puts("Total time spent benchmarking: #{bench_total_time}s")
 puts()
 
-# Table for the data we've gathered
-table  = [["bench", "interp (ms)", "stddev (%)", "yjit (ms)", "stddev (%)", "interp/yjit", "yjit 1st itr"]]
-format =  ["%s",    "%.1f",        "%.1f",       "%.1f",      "%.1f",        "%.2f",        "%.2f"]
-
-# Format the results table
+out_data = {benchmarks: {}}
 bench_names.each do |bench_name|
-    yjit_t = yjit_times[bench_name]
-    interp_t = interp_times[bench_name]
+  interp_t = interp_times[bench_name][WARMUP_ITRS..]
 
-    yjit_t0 = yjit_t[0]
-    yjit_t = yjit_t[WARMUP_ITRS..]
-    interp_t0 = interp_t[0]
-    interp_t = interp_t[WARMUP_ITRS..]
-    ratio_1st = interp_t0 / yjit_t0
-    ratio = mean(interp_t) / mean(yjit_t)
-
-    table.append([
-        bench_name,
-        mean(interp_t),
-        100 * stddev(interp_t) / mean(interp_t),
-        mean(yjit_t),
-        100 * stddev(yjit_t) / mean(yjit_t),
-        ratio,
-        ratio_1st,
-    ])
+  out_data[:benchmarks][bench_name] = {
+    datapoints: interp_t,
+    mean: mean(interp_t),
+    stddev: 100 * stddev(interp_t) / mean(interp_t),
+  }
 end
 
-# Find a free file index for the output files
-file_no = free_file_no(args.out_path)
+json_str = JSON.generate(out_data)
 
-metadata = {
-    'end_time': Time.now.strftime("%Y-%m-%d %H:%M:%S %Z (%z)"),
-    'yjit_opts': args.yjit_opts,
-}
-
-ruby_version.each do |k, v|
-    metadata[k] = v
-end
-
-# Save the raw data as JSON
-out_json_path = File.join(args.out_path, "output_%03d.json" % file_no)
-File.open(out_json_path, "w") do |file|
-    out_data = {
-        'metadata': metadata,
-        'yjit': yjit_times,
-        'interp': interp_times,
-    }
-    json_str = JSON.generate(out_data)
-    file.write json_str
-end
-
-# Save data as CSV so we can produce tables/graphs in a spreasheet program
-# NOTE: we don't do any number formatting for the output file because
-#       we don't want to lose any precision
-output_rows = []
-metadata.each do |key, value|
-    output_rows.append([key, value])
-end
-output_rows.append([])
-output_rows.concat(table)
-out_tbl_path = File.join(args.out_path, 'output_%03d.csv' % file_no)
-CSV.open(out_tbl_path, "wb") do |csv|
-    output_rows.each do |row|
-        csv << row
-    end
-end
-
-# Save the output in a text file that we can easily refer to
-output_str = ""
-metadata.each do |key, value|
-    output_str += "#{key}=\"#{value}\"\n"
-end
-output_str += "\n"
-output_str += table_to_str(table, format) + "\n"
-output_str += "Legend:\n"
-output_str += "- interp/yjit: ratio of interp/yjit time. Higher is better. Above 1 represents a speedup.\n"
-output_str += "- 1st itr: ratio of interp/yjit time for the first benchmarking iteration.\n"
-out_txt_path = File.join(args.out_path, "output_%03d.txt" % file_no)
-File.open(out_txt_path, "w") { |f| f.write output_str }
-
-# Print the table to the console, with numbers truncated
-puts(output_str)
+puts "json=#{json_str}"
