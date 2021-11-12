@@ -7,39 +7,41 @@ use_gemfile
 # The original timed several variations (low-level vs Composer interface; TTF vs non-TTF). We don't collect
 # a lot of individual variant data.
 
-require "hexapdf"
-require "fileutils"
+require 'hexapdf'
+require 'fileutils'
 
-IN_FILENAME = "odyssey.txt"
+IN_FILENAME = 'odyssey.txt'
 WIDTH = 50
 HEIGHT = 1000
 
-EXPECTED_MIN_SIZE = 569800
-EXPECTED_MAX_SIZE = 569900
+EXPECTED_SIZE = 569_797
 
-Dir["/tmp/hexapdf-result*.pdf"].each { |file| FileUtils.rm file }
+Dir['/tmp/hexapdf-result*.pdf'].each { |file| FileUtils.rm file }
 
 index = 0
 run_benchmark(10) do
   ## TTF benchmark (v. slow)
-  #HexaPDF::Composer.create(OUT_FILENAME, page_size: [0, 0, WIDTH, HEIGHT], margin: 0) do |pdf|
+  # HexaPDF::Composer.create(OUT_FILENAME, page_size: [0, 0, WIDTH, HEIGHT], margin: 0) do |pdf|
   #  pdf.text(File.read(IN_FILENAME), font_features: {kern: false},
   #           font: "./DejaVuSans.ttf", font_size: 10, last_line_gap: true,
   #           line_spacing: {type: :fixed, value: 11.16})
-  #end
+  # end
 
   # Non-TTF benchmark
   index += 1
-  out_filename = "/tmp/hexapdf-result-#{ "%03d" % index }.pdf"
-  HexaPDF::Composer.create(out_filename, page_size: [0, 0, WIDTH, HEIGHT], margin: 0) do |pdf|
-    pdf.text(File.read(IN_FILENAME), font_features: {kern: false},
-             font: "Times", font_size: 10, last_line_gap: true,
-             line_spacing: {type: :fixed, value: 11.16})
-  end
+  out_filename = "/tmp/hexapdf-result-#{'%03d' % index}.pdf"
+
+  composer = HexaPDF::Composer.new(page_size: [0, 0, WIDTH, HEIGHT], margin: 0)
+  composer.text(File.read(IN_FILENAME), font_features: { kern: false },
+                                        font: 'Times', font_size: 10, last_line_gap: true,
+                                        line_spacing: { type: :fixed, value: 11.16 })
+  composer.document.trailer[:ID] = %w[benchmark benchmark]
+  composer.write(out_filename, update_fields: false)
 end
 
-Dir["/tmp/hexapdf-result*.pdf"].each do |file|
+Dir['/tmp/hexapdf-result*.pdf'].each do |file|
   sz = File.stat(file).size
-  raise "Incorrect size #{sz} for file #{file}!" unless sz <= EXPECTED_MAX_SIZE && sz >= EXPECTED_MIN_SIZE
+  raise "Incorrect size #{sz} for file #{file}!" unless sz == EXPECTED_SIZE
+
   FileUtils.rm file
 end
