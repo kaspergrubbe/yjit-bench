@@ -5,7 +5,7 @@ require_relative './harness-common'
 WARMUP_ITRS = ENV.fetch('WARMUP_ITRS', 15).to_i
 
 # Minimum number of benchmarking iterations
-MIN_BENCH_ITRS = ENV.fetch('MIN_BENCH_ITRS', 42).to_i
+MIN_BENCH_ITRS = ENV.fetch('MIN_BENCH_ITRS', 100).to_i
 
 # Minimum benchmarking time in seconds
 MIN_BENCH_TIME = ENV.fetch('MIN_BENCH_TIME', 10).to_i
