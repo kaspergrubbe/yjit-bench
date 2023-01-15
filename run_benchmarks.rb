@@ -262,6 +262,7 @@ end
 args = OpenStruct.new({
     repo_dir: "../yjit",
     out_path: "data",
+    ruby_opts: "",
     yjit_opts: "",
     name_filters: []
 })
@@ -280,6 +281,10 @@ OptionParser.new do |opts|
     args.name_filters = list
   end
 
+  opts.on("--ruby_opts=OPT_STRING", "string of command-line options to run ruby with") do |rbstr|
+    args.ruby_opts=rbstr
+  end
+
   opts.on("--yjit_opts=OPT_STRING", "string of command-line options to run YJIT with") do |str|
     args.yjit_opts=str
   end
@@ -287,7 +292,7 @@ end.parse!
 
 # Remaining arguments are treated as benchmark name filters
 if ARGV.length > 0
-    args.name_filters += ARGV
+  args.name_filters += ARGV
 end
 
 # Check that the chruby command was run
@@ -308,7 +313,7 @@ ruby_version = get_ruby_version(args.repo_dir)
 
 # Benchmark with and without YJIT
 bench_start_time = Time.now.to_f
-interp_times = run_benchmarks(ruby_opts="", name_filters=args.name_filters, out_path=args.out_path)
+interp_times = run_benchmarks(ruby_opts=args.ruby_opts, name_filters=args.name_filters, out_path=args.out_path)
 bench_end_time = Time.now.to_f
 bench_names = interp_times.keys.sort
 
