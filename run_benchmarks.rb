@@ -8,8 +8,6 @@ require 'csv'
 require 'json'
 require 'rbconfig'
 
-WARMUP_ITRS = 15
-
 # Check which OS we are running
 def os
     @os ||= (
@@ -203,7 +201,7 @@ def match_filter(name, filters)
 end
 
 # Run all the benchmarks and record execution times
-def run_benchmarks(ruby_opts, name_filters, out_path)
+def run_benchmarks(ruby_opts, name_filters, out_path, min_itrs, warmup_itrs)
     bench_times = {}
 
     # Get the list of benchmark files/directories matching name filters
@@ -225,7 +223,8 @@ def run_benchmarks(ruby_opts, name_filters, out_path)
 
         # Set up the environment for the benchmarking command
         ENV["OUT_CSV_PATH"] = File.join(out_path, 'temp.csv')
-        ENV["WARMUP_ITRS"] = WARMUP_ITRS.to_s
+        ENV["MIN_BENCH_ITRS"] = min_itrs.to_s
+        ENV["WARMUP_ITRS"] = warmup_itrs.to_s
 
         # Set up the benchmarking command
         cmd = []
@@ -264,7 +263,9 @@ args = OpenStruct.new({
     out_path: "data",
     ruby_opts: "",
     yjit_opts: "",
-    name_filters: []
+    name_filters: [],
+    min_itrs: 100,
+    warmup_itrs: 15
 })
 
 OptionParser.new do |opts|
@@ -279,6 +280,14 @@ OptionParser.new do |opts|
 
   opts.on("--name_filters=x,y,z", Array, "when given, only benchmarks with names that contain one of these strings will run") do |list|
     args.name_filters = list
+  end
+
+  opts.on("--min_itrs=ITRS", "string of command-line options to run ruby with") do |rbstr|
+    args.min_itrs=rbstr
+  end
+
+  opts.on("--warmup_itrs=ITRS", "string of command-line options to run ruby with") do |rbstr|
+    args.warmup_itrs=rbstr
   end
 
   opts.on("--ruby_opts=OPT_STRING", "string of command-line options to run ruby with") do |rbstr|
@@ -313,7 +322,7 @@ ruby_version = get_ruby_version(args.repo_dir)
 
 # Benchmark with and without YJIT
 bench_start_time = Time.now.to_f
-interp_times = run_benchmarks(ruby_opts=args.ruby_opts, name_filters=args.name_filters, out_path=args.out_path)
+interp_times = run_benchmarks(ruby_opts=args.ruby_opts, name_filters=args.name_filters, out_path=args.out_path, min_itrs=args.min_itrs, warmup_itrs=args.warmup_itrs)
 bench_end_time = Time.now.to_f
 bench_names = interp_times.keys.sort
 
