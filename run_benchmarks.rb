@@ -283,11 +283,11 @@ OptionParser.new do |opts|
   end
 
   opts.on("--min_itrs=ITRS", "string of command-line options to run ruby with") do |rbstr|
-    args.min_itrs=rbstr
+    args.min_itrs=rbstr.to_i
   end
 
   opts.on("--warmup_itrs=ITRS", "string of command-line options to run ruby with") do |rbstr|
-    args.warmup_itrs=rbstr
+    args.warmup_itrs=rbstr.to_i
   end
 
   opts.on("--ruby_opts=OPT_STRING", "string of command-line options to run ruby with") do |rbstr|
@@ -332,7 +332,7 @@ puts()
 
 out_data = {benchmarks: {}}
 bench_names.each do |bench_name|
-  interp_t = interp_times[bench_name][WARMUP_ITRS..]
+  interp_t = interp_times[bench_name][args.warmup_itrs..]
 
   out_data[:benchmarks][bench_name] = {
     datapoints: interp_t,
